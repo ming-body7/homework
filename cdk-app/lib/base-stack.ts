@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as eks from 'aws-cdk-lib/aws-eks';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
 
 export interface BaseStackProps extends cdk.StackProps {
@@ -23,8 +24,19 @@ export class BaseStack extends cdk.Stack {
       defaultCapacity: 2,
       defaultCapacityInstance: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.T3,
-        cdk.aws_ec2.InstanceSize.MEDIUM
+        cdk.aws_ec2.InstanceSize.MICRO
       ),
+    });
+
+    // EKS deployment (Kubernetes manifest) for Spring Boot app
+    const appDeployment = cluster.addHelmChart('springboot-app', {
+      chart: 'my-springboot-app',
+      namespace: 'default',
+      values: {
+        stage: props.stage, // 'beta' or 'prod' pass to k8s
+        image: 'my-springboot-app:latest',
+        replicas: 3,
+      },
     });
 
     // Create service account for pod identity
@@ -62,10 +74,9 @@ export class BaseStack extends cdk.Stack {
       }
     });
 
-    // Create SQS Queue
-    const queue = new sqs.Queue(this, `${props.stage}Queue`, {
-      visibilityTimeout: cdk.Duration.seconds(300),
-      queueName: `${props.stage}-queue`,
+
+    const repository = new ecr.Repository(this, 'MyRepository', {
+      repositoryName: 'my-springboot-app',
     });
   }
 }
