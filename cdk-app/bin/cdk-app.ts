@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { BaseStack } from '../lib/base-stack';
+import { CloudWatchStack } from '../lib/cloudwatch-stack';
 
 const app = new cdk.App();
 
@@ -13,8 +14,24 @@ new BaseStack(app, 'BetaStack', {
   },
 });
 
+new CloudWatchStack(app, 'BetaCloudWatchStack', {
+  stage: 'beta',
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+});
+
 // Deploy prod stage
 new BaseStack(app, 'ProdStack', {
+  stage: 'prod',
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION,
+  },
+});
+
+new CloudWatchStack(app, 'ProdCloudWatchStack', {
   stage: 'prod',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
