@@ -29,15 +29,15 @@ export class BaseStack extends cdk.Stack {
     });
 
     // EKS deployment (Kubernetes manifest) for Spring Boot app
-    const appDeployment = cluster.addHelmChart('springboot-app', {
-      chart: 'my-springboot-app',
-      namespace: 'default',
-      values: {
-        stage: props.stage, // 'beta' or 'prod' pass to k8s
-        image: 'my-springboot-app:latest',
-        replicas: 3,
-      },
-    });
+    // const appDeployment = cluster.addHelmChart('springboot-app', {
+    //   chart: 'my-springboot-app',
+    //   namespace: 'default',
+    //   values: {
+    //     stage: props.stage, // 'beta' or 'prod' pass to k8s
+    //     image: 'my-springboot-app:latest',
+    //     replicas: 3,
+    //   },
+    // });
 
     // Create service account for pod identity
     const serviceAccount = cluster.addServiceAccount('app-service-account', {
