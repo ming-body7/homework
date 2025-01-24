@@ -17,7 +17,7 @@ export class BaseStack extends cdk.Stack {
       defaultCapacity: 2,
       defaultCapacityInstance: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.T3,
-        cdk.aws_ec2.InstanceSize.MEDIUM
+        cdk.aws_ec2.InstanceSize.MICRO
       ),
     });
 
