@@ -11,14 +11,55 @@ export class BaseStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BaseStackProps) {
     super(scope, id, props);
 
+    // Create SQS Queue
+    const queue = new sqs.Queue(this, 'MessageQueue', {
+      queueName: `${props.stage}-demo-message-queue`,
+      visibilityTimeout: cdk.Duration.seconds(300),
+    });
+
     // Create EKS Cluster
     const cluster = new eks.Cluster(this, `${props.stage}Cluster`, {
       version: eks.KubernetesVersion.V1_27,
       defaultCapacity: 2,
       defaultCapacityInstance: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.T3,
-        cdk.aws_ec2.InstanceSize.MICRO
+        cdk.aws_ec2.InstanceSize.MEDIUM
       ),
+    });
+
+    // Create service account for pod identity
+    const serviceAccount = cluster.addServiceAccount('app-service-account', {
+      name: 'app-service-account',
+      namespace: 'default'
+    });
+
+    // Grant SQS permissions to the service account
+    queue.grantConsumeMessages(serviceAccount);
+
+    // Add deployment manifest
+    cluster.addManifest('app-deployment', {
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: 'spring-app', namespace: 'default' },
+      spec: {
+        replicas: 2,
+        selector: { matchLabels: { app: 'spring-app' } },
+        template: {
+          metadata: { labels: { app: 'spring-app' } },
+          spec: {
+            serviceAccountName: 'app-service-account',
+            containers: [{
+              name: 'spring-app',
+              image: `${props.env?.account}.dkr.ecr.${props.env?.region}.amazonaws.com/spring-app:latest`,
+              ports: [{ containerPort: 8080 }],
+              env: [
+                { name: 'CLOUD_AWS_REGION_STATIC', value: props.env?.region },
+                { name: 'CLOUD_AWS_SQS_QUEUE_NAME', value: queue.queueName }
+              ]
+            }]
+          }
+        }
+      }
     });
 
     // Create SQS Queue
