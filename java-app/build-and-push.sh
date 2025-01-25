@@ -9,6 +9,6 @@ TAG=latest
 aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
 
 # Build and push the Docker image
-docker build -t springboot-app .
-docker tag springboot-app:latest $ECR_REPO:$TAG
+docker build --platform linux/amd64,linux/arm64 -t my-springboot-app .
+docker tag my-springboot-app:latest $ECR_REPO:$TAG
 docker push $ECR_REPO:$TAG

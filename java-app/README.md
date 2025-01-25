@@ -31,3 +31,7 @@ mvn test
 - `src/main/resources` - Configuration files
 - `src/test/java` - Test source code
 - `pom.xml` - Maven project configuration
+
+##notes
+upload to ecr:
+./build-and-push.sh 651706779316.dkr.ecr.us-west-2.amazonaws.com/my-springboot-app us-west-2
