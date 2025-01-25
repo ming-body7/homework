@@ -58,16 +58,16 @@ export class BaseStack extends cdk.Stack {
     const appManifest = {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
-      metadata: { name: 'spring-app', namespace: 'default' },
+      metadata: { name: 'springnoot-app', namespace: 'default' },
       spec: {
         replicas: 1,
-        selector: { matchLabels: { app: 'spring-app' } },
+        selector: { matchLabels: { app: 'springboot-app' } },
         template: {
-          metadata: { labels: { app: 'spring-app' } },
+          metadata: { labels: { app: 'springboot-app' } },
           spec: {
             serviceAccountName: 'app-service-account',
             containers: [{
-              name: 'spring-app',
+              name: 'springboot-app',
               image: `${props.env?.account}.dkr.ecr.${props.env?.region}.amazonaws.com/my-springboot-app:latest`,
               ports: [{ containerPort: 8080 }],
               env: [
