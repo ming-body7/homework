@@ -45,6 +45,12 @@ export class BaseStack extends cdk.Stack {
       ),
     });
 
+    // Create SQS Queue
+    const queue = new sqs.Queue(this, 'MessageQueue', {
+      queueName: `${props.stage}-demo-message-queue`,
+      visibilityTimeout: cdk.Duration.seconds(300),
+    });
+
     // Reference the existing IAM user by its name
     const existingIamUser = iam.User.fromUserName(this, 'arn:aws:iam::651706779316:user/cdk-user', 'cdk-user'); // Replace with your IAM user name
 
@@ -71,8 +77,8 @@ export class BaseStack extends cdk.Stack {
               image: `${props.env?.account}.dkr.ecr.${props.env?.region}.amazonaws.com/my-springboot-app:latest`,
               ports: [{ containerPort: 8080 }],
               env: [
-                { name: 'CLOUD_AWS_REGION_STATIC', value: props.env?.region }
-                //{ name: 'CLOUD_AWS_SQS_QUEUE_NAME', value: queue.queueName }
+                { name: 'CLOUD_AWS_REGION_STATIC', value: props.env?.region },
+                { name: 'CLOUD_AWS_SQS_QUEUE_NAME', value: queue.queueName }
               ]
             }]
           }
@@ -105,13 +111,8 @@ export class BaseStack extends cdk.Stack {
       name: 'app-service-account',
       namespace: 'default'
     });
-    // Create SQS Queue
-    // const queue = new sqs.Queue(this, 'MessageQueue', {
-    //   queueName: `${props.stage}-demo-message-queue`,
-    //   visibilityTimeout: cdk.Duration.seconds(300),
-    // });
 
     // Grant SQS permissions to the service account
-    // queue.grantConsumeMessages(serviceAccount);
+    queue.grantConsumeMessages(serviceAccount);
   }
 }
