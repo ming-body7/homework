@@ -32,11 +32,6 @@ spec:
             configMapKeyRef:
               name: aws-config
               key: region
-        - name: SPRING_PROFILES_ACTIVE
-          valueFrom:
-            configMapKeyRef:
-              name: springboot-config
-              key: stage  # 'beta' or 'prod' passed from the ConfigMap
         livenessProbe:
           httpGet:
             path: /actuator/health
