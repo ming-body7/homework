@@ -12,12 +12,6 @@ export class BaseStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BaseStackProps) {
     super(scope, id, props);
 
-    // Create SQS Queue
-    // const queue = new sqs.Queue(this, 'MessageQueue', {
-    //   queueName: `${props.stage}-demo-message-queue`,
-    //   visibilityTimeout: cdk.Duration.seconds(300),
-    // });
-
     // Create VPC for EKS
     const vpc = new cdk.aws_ec2.Vpc(this, `${props.stage}EksVpc`, {
       maxAzs: 2,
@@ -47,16 +41,6 @@ export class BaseStack extends cdk.Stack {
         cdk.aws_ec2.InstanceSize.MICRO
       ),
     });
-
-
-    // Create service account for pod identity
-    // const serviceAccount = cluster.addServiceAccount('app-service-account', {
-    //   name: 'app-service-account',
-    //   namespace: 'default'
-    // });
-
-    // Grant SQS permissions to the service account
-    // queue.grantConsumeMessages(serviceAccount);
 
     // Add deployment manifest
     // cluster.addManifest('app-deployment', {
@@ -88,5 +72,18 @@ export class BaseStack extends cdk.Stack {
     const repository = new ecr.Repository(this, 'MyRepository', {
       repositoryName: 'my-springboot-app',
     });
+    // Create service account for pod identity
+    // const serviceAccount = cluster.addServiceAccount('app-service-account', {
+    //   name: 'app-service-account',
+    //   namespace: 'default'
+    // });
+    // Create SQS Queue
+    // const queue = new sqs.Queue(this, 'MessageQueue', {
+    //   queueName: `${props.stage}-demo-message-queue`,
+    //   visibilityTimeout: cdk.Duration.seconds(300),
+    // });
+
+    // Grant SQS permissions to the service account
+    // queue.grantConsumeMessages(serviceAccount);
   }
 }
