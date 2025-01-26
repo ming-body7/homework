@@ -1,18 +1,18 @@
 package com.example.demo.controller;
 
-import com.example.demo.DemoApplication;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
-import java.util.logging.Logger;
 
 @RestController
 public class TestController {
 
 
-    Logger logger = Logger.getLogger(TestController.class.getName());
+    private static final Logger logger = LogManager.getLogger(TestController.class);
 
     @GetMapping("/test")
     public String test() {

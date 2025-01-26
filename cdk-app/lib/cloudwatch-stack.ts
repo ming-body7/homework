@@ -1,47 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
 import { BaseStack, BaseStackProps } from './base-stack';
+import * as logs from 'aws-cdk-lib/aws-logs';
+
 
 export interface CloudWatchStackProps extends BaseStackProps {
   // Add any CloudWatch-specific props here
 }
 
-export class CloudWatchStack extends BaseStack {
+export class CloudWatchStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: CloudWatchStackProps) {
     super(scope, id, props);
 
-    // Create CloudWatch dashboard
-    const dashboard = new cloudwatch.Dashboard(this, 'MainDashboard', {
-      dashboardName: 'MainDashboard'
-    });
-
-    // Add CPU utilization widget
-    dashboard.addWidgets(
-      new cloudwatch.GraphWidget({
-        title: 'CPU Utilization',
-        left: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/EC2',
-            metricName: 'CPUUtilization',
-            statistic: 'Average',
-            period: cdk.Duration.minutes(5)
-          })
-        ],
-        width: 12
-      }),
-      new cloudwatch.GraphWidget({
-        title: 'Memory Usage',
-        left: [
-          new cloudwatch.Metric({
-            namespace: 'AWS/EC2',
-            metricName: 'MemoryUtilization',
-            statistic: 'Average',
-            period: cdk.Duration.minutes(5)
-          })
-        ],
-        width: 12
-      })
-    );
+    // Create a CloudWatch Log Group
+    // const logGroup = new logs.LogGroup(this, 'MyApplicationLogGroup', {
+    //   logGroupName: '/MyApplicationLogs',
+    //   retention: logs.RetentionDays.ONE_WEEK, // Automatically delete logs older than one week
+    //   removalPolicy: cdk.RemovalPolicy.DESTROY, // Automatically delete the log group when the stack is deleted
+    // });
   }
 }

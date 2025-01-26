@@ -114,5 +114,48 @@ export class BaseStack extends cdk.Stack {
 
     // Grant SQS permissions to the service account
     queue.grantConsumeMessages(serviceAccount);
+
+    const fluentBitServiceAccount = cluster.addServiceAccount('FluentBitServiceAccount', {
+      name: 'fluent-bit',
+      namespace: 'kube-system',
+    });
+    // Define CloudWatch Logs policy
+    const cloudWatchLogsPolicy = new iam.PolicyStatement({
+      actions: [
+        "logs:CreateLogGroup",
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+      ],
+      resources: ["arn:aws:logs:*:*:*"]
+    });
+    fluentBitServiceAccount.addToPrincipalPolicy(cloudWatchLogsPolicy);
+
+    //use helm to install fluent-bit
+    const fluentBitHelmChart = cluster.addHelmChart('FluentBit', {
+      chart: 'aws-for-fluent-bit',
+      release: 'fluent-bit',
+      repository: 'https://aws.github.io/eks-charts',
+      namespace: 'kube-system',
+      values: {
+        serviceAccount: {
+          create: false,
+          name: fluentBitServiceAccount.serviceAccountName,
+        },
+        input: {
+          tail: {
+            enabled: true,
+            path: '/var/log/containers/*.log',
+          },
+        },
+        cloudWatch: {
+          enabled: true,
+          region: props.env?.region,
+          logGroup: '/aws/container-logs/application',
+          logStreamPrefix: 'kube/',
+          autoCreateGroup: true,
+        }
+      }
+    });
   }
 }
