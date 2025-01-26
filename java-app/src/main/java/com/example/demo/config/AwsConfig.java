@@ -1,13 +1,12 @@
 package com.example.demo.config;
 
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
-import com.amazonaws.services.sqs.AmazonSQSAsync;
-import com.amazonaws.services.sqs.AmazonSQSAsyncClientBuilder;
-import io.awspring.cloud.messaging.core.QueueMessagingTemplate;
+import io.awspring.cloud.sqs.operations.SqsTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 
 @Configuration
 public class AwsConfig {
@@ -17,15 +16,15 @@ public class AwsConfig {
 
     @Bean
     @Primary
-    public AmazonSQSAsync amazonSQSAsync() {
-        return AmazonSQSAsyncClientBuilder.standard()
-                .withRegion(region)
-                .withCredentials(new DefaultAWSCredentialsProviderChain())
+    public SqsAsyncClient amazonSQSAsync() {
+        return SqsAsyncClient
+                .builder()
+                .region(Region.of(region))
                 .build();
     }
 
     @Bean
-    public QueueMessagingTemplate queueMessagingTemplate(AmazonSQSAsync amazonSQSAsync) {
-        return new QueueMessagingTemplate(amazonSQSAsync);
+    public SqsTemplate sqsTemplate(SqsAsyncClient amazonSQSAsync) {
+        return SqsTemplate.newTemplate(amazonSQSAsync);
     }
 }

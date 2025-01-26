@@ -3,7 +3,7 @@
 This is a basic Spring Boot application created with Maven build tool.
 
 ## Requirements
-- Java 11 or higher
+- Java 17 or higher
 - Maven 3.6.x or higher
 
 ## Building the Application

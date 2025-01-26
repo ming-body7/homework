@@ -1,7 +1,6 @@
 package com.example.demo.listener;
 
-import io.awspring.cloud.messaging.listener.SqsMessageDeletionPolicy;
-import io.awspring.cloud.messaging.listener.annotation.SqsListener;
+import io.awspring.cloud.sqs.annotation.SqsListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -15,7 +14,7 @@ public class SqsMessageListener {
         logger.info("SqsMessageListener initialized");
     }
 
-    @SqsListener(value = "${cloud.aws.sqs.queue-name}", deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
+    @SqsListener(value = "beta-demo-message-queue")
     public void processMessage(String message) {
         logger.info("Received message: {}", message);
         // Add your message processing logic here
