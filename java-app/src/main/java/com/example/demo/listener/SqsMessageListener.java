@@ -11,6 +11,10 @@ public class SqsMessageListener {
     
     private static final Logger logger = LoggerFactory.getLogger(SqsMessageListener.class);
 
+    public SqsMessageListener() {
+        logger.info("SqsMessageListener initialized");
+    }
+
     @SqsListener(value = "${cloud.aws.sqs.queue-name}", deletionPolicy = SqsMessageDeletionPolicy.ON_SUCCESS)
     public void processMessage(String message) {
         logger.info("Received message: {}", message);
