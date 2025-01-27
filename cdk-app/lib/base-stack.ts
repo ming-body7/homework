@@ -41,8 +41,49 @@ export class BaseStack extends cdk.Stack {
       defaultCapacity: 1,
       defaultCapacityInstance: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.T3,
-        cdk.aws_ec2.InstanceSize.SMALL
+        cdk.aws_ec2.InstanceSize.XLARGE2
       ),
+    });
+
+    // Create IAM Policy for the EBS CSI Driver
+    const ebsPolicy = new iam.PolicyStatement({
+      actions: [
+        'ec2:CreateVolume',
+        'ec2:AttachVolume',
+        'ec2:DeleteVolume',
+        'ec2:DetachVolume',
+        'ec2:DescribeVolumes',
+        'ec2:DescribeVolumeAttribute',
+        'ec2:DescribeVolumeStatus',
+        'ec2:DescribeInstances',
+        'ec2:DescribeSnapshots',
+        'ec2:CreateTags',
+        'ec2:DeleteTags',
+      ],
+      resources: ['*'],
+    });
+
+    // Attach the IAM policy to the service account
+    const ebsServiceAccount = cluster.addServiceAccount('EBSServiceAccount', {
+      name: 'ebs-csi-controller-sa',
+      namespace: 'kube-system',
+    });
+    ebsServiceAccount.addToPrincipalPolicy(ebsPolicy);
+
+    // Add the Helm chart for the EBS CSI Driver
+    cluster.addHelmChart('aws-ebs-csi-driver', {
+      chart: 'aws-ebs-csi-driver',
+      repository: 'https://kubernetes-sigs.github.io/aws-ebs-csi-driver',
+      namespace: 'kube-system',
+      release: 'aws-ebs-csi-driver',
+      values: {
+        controller: {
+          serviceAccount: {
+            create: false,
+            name: 'ebs-csi-controller-sa',
+          },
+        },
+      },
     });
 
     // Create SQS Queue
@@ -92,7 +133,10 @@ export class BaseStack extends cdk.Stack {
       metadata: { name: 'springboot-app-service' },
       spec: {
         selector: { app: 'springboot-app' },
-        ports: [{ protocol: 'TCP', port: 80, targetPort: 8080 }],
+        ports: [
+            {name: 'http', protocol: 'TCP', port: 80, targetPort: 8080 },
+            {name: 'metrics', protocol: 'TCP', port: 8081, targetPort: 8081 },
+        ],
         type: 'LoadBalancer',
       },
     };
@@ -157,5 +201,66 @@ export class BaseStack extends cdk.Stack {
         }
       }
     });
+
+    // Add Prometheus Helm chart with custom config
+    cluster.addManifest('MonitoringNamespace', {
+      apiVersion: 'v1',
+      kind: 'Namespace',
+      metadata: { name: 'monitoring' },
+    });
+
+    // Define Prometheus configuration as a ConfigMap
+    const prometheusConfigMap = cluster.addManifest('PrometheusConfigMap', {
+      apiVersion: 'v1',
+      kind: 'ConfigMap',
+      metadata: {
+        name: 'prometheus-server-config',
+        namespace: 'monitoring',
+      },
+      data: {
+        'prometheus.yml': `
+          global:
+            scrape_interval: 15s
+          scrape_configs:
+            - job_name: "springboot"
+              metrics_path: "/actuator/prometheus"
+              static_configs:
+                - targets: ["springboot-service.default.svc.cluster.local:8081"]
+        `,
+      },
+    });
+
+    // Deploy Prometheus using Helm and mount the ConfigMap
+    const prometheusChart = cluster.addHelmChart('PrometheusChart', {
+      chart: 'prometheus',
+      repository: 'https://prometheus-community.github.io/helm-charts',
+      release: 'prometheus',
+      namespace: 'monitoring',
+      createNamespace: true,
+      values: {
+        server: {
+          service: {
+            type: 'ClusterIP', // Change to LoadBalancer if external access is required
+            port: 9090,
+            targetPort: 9090,
+          },
+          extraVolumeMounts: [
+            {
+              name: 'config-volume',
+              mountPath: '/etc/prometheus',
+            },
+          ],
+          extraVolumes: [
+            {
+              name: 'config-volume',
+              configMap: {
+                name: 'prometheus-server-config',
+              },
+            },
+          ],
+        },
+      },
+    });
+    prometheusChart.node.addDependency(prometheusConfigMap);
   }
 }
