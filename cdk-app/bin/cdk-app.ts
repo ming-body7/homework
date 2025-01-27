@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { BaseStack } from '../lib/base-stack';
+import { BootstrapStack } from '../lib/bootstrap-stack';
 import { CloudWatchStack } from '../lib/cloudwatch-stack';
 
 const app = new cdk.App();
 
+new BootstrapStack(app, 'BoostrapStack', {
+  env: {
+    account: '651706779316',
+    region: 'us-west-2',
+  },
+});
+
 // Deploy beta stage
-new BaseStack(app, 'BetaStack', {
+new BaseStack(app, 'BetaStack5', {
   stage: 'beta',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,

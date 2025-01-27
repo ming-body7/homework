@@ -41,50 +41,50 @@ export class BaseStack extends cdk.Stack {
       defaultCapacity: 1,
       defaultCapacityInstance: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.T3,
-        cdk.aws_ec2.InstanceSize.XLARGE2
+        cdk.aws_ec2.InstanceSize.XLARGE
       ),
     });
 
     // Create IAM Policy for the EBS CSI Driver
-    const ebsPolicy = new iam.PolicyStatement({
-      actions: [
-        'ec2:CreateVolume',
-        'ec2:AttachVolume',
-        'ec2:DeleteVolume',
-        'ec2:DetachVolume',
-        'ec2:DescribeVolumes',
-        'ec2:DescribeVolumeAttribute',
-        'ec2:DescribeVolumeStatus',
-        'ec2:DescribeInstances',
-        'ec2:DescribeSnapshots',
-        'ec2:CreateTags',
-        'ec2:DeleteTags',
-      ],
-      resources: ['*'],
-    });
+    // const ebsPolicy = new iam.PolicyStatement({
+    //   actions: [
+    //     'ec2:CreateVolume',
+    //     'ec2:AttachVolume',
+    //     'ec2:DeleteVolume',
+    //     'ec2:DetachVolume',
+    //     'ec2:DescribeVolumes',
+    //     'ec2:DescribeVolumeAttribute',
+    //     'ec2:DescribeVolumeStatus',
+    //     'ec2:DescribeInstances',
+    //     'ec2:DescribeSnapshots',
+    //     'ec2:CreateTags',
+    //     'ec2:DeleteTags',
+    //   ],
+    //   resources: ['*'],
+    // });
 
     // Attach the IAM policy to the service account
-    const ebsServiceAccount = cluster.addServiceAccount('EBSServiceAccount', {
-      name: 'ebs-csi-controller-sa',
-      namespace: 'kube-system',
-    });
-    ebsServiceAccount.addToPrincipalPolicy(ebsPolicy);
+    // const ebsServiceAccount = cluster.addServiceAccount('EBSServiceAccount', {
+    //   name: 'ebs-csi-controller-sa',
+    //   namespace: 'kube-system'
+    // });
+    // ebsServiceAccount.addToPrincipalPolicy(ebsPolicy);
 
     // Add the Helm chart for the EBS CSI Driver
-    cluster.addHelmChart('aws-ebs-csi-driver', {
-      chart: 'aws-ebs-csi-driver',
-      repository: 'https://kubernetes-sigs.github.io/aws-ebs-csi-driver',
-      namespace: 'kube-system',
-      release: 'aws-ebs-csi-driver',
-      values: {
-        controller: {
-          serviceAccount: {
-            create: false,
-            name: 'ebs-csi-controller-sa',
-          },
-        },
-      },
-    });
+    // cluster.addHelmChart('aws-ebs-csi-driver', {
+    //   chart: 'aws-ebs-csi-driver',
+    //   repository: 'https://kubernetes-sigs.github.io/aws-ebs-csi-driver',
+    //   namespace: 'kube-system',
+    //   release: 'aws-ebs-csi-driver',
+    //   values: {
+    //     controller: {
+    //       serviceAccount: {
+    //         create: false,
+    //         name: 'ebs-csi-controller-sa',
+    //       },
+    //     },
+    //   },
+    // });
 
     // Create SQS Queue
     const queue = new sqs.Queue(this, 'MessageQueue', {
@@ -93,7 +93,7 @@ export class BaseStack extends cdk.Stack {
     });
 
     // Reference the existing IAM user by its name
-    const existingIamUser = iam.User.fromUserName(this, 'arn:aws:iam::651706779316:user/cdk-user', 'cdk-user'); // Replace with your IAM user name
+    const existingIamUser = iam.User.fromUserName(this, `arn:aws:iam::${props.env?.account}:user/cdk-user`, 'cdk-user'); // Replace with your IAM user name
 
     // Add the IAM user to the aws-auth ConfigMap with system:masters (admin access)
     cluster.awsAuth.addUserMapping(existingIamUser, {
@@ -142,12 +142,11 @@ export class BaseStack extends cdk.Stack {
     };
 
     // Apply the Kubernetes manifest to the cluster
-    cluster.addManifest('SpringBootApp', appManifest, serviceManifest);
+    const springBootApp = cluster.addManifest('SpringBootApp', appManifest, serviceManifest);
 
-    const repository = new ecr.Repository(this, 'MyRepository', {
-      repositoryName: 'my-springboot-app',
-    });
+
     // Grant the EKS node group permissions to pull from ECR
+    const repository = ecr.Repository.fromRepositoryArn(this, "id", "arn:aws:ecr:us-west-2:651706779316:repository/my-springboot-app");
     repository.grantPull(cluster.defaultNodegroup?.role!);
 
     // Create service account for pod identity
@@ -158,6 +157,8 @@ export class BaseStack extends cdk.Stack {
 
     // Grant SQS permissions to the service account
     queue.grantConsumeMessages(serviceAccount);
+
+    springBootApp.node.addDependency(serviceAccount);
 
     const fluentBitServiceAccount = cluster.addServiceAccount('FluentBitServiceAccount', {
       name: 'fluent-bit',
@@ -203,7 +204,7 @@ export class BaseStack extends cdk.Stack {
     });
 
     // Add Prometheus Helm chart with custom config
-    cluster.addManifest('MonitoringNamespace', {
+    const monitoringNameSpace = cluster.addManifest('MonitoringNamespace', {
       apiVersion: 'v1',
       kind: 'Namespace',
       metadata: { name: 'monitoring' },
@@ -229,6 +230,8 @@ export class BaseStack extends cdk.Stack {
         `,
       },
     });
+
+    prometheusConfigMap.node.addDependency(monitoringNameSpace);
 
     // Deploy Prometheus using Helm and mount the ConfigMap
     const prometheusChart = cluster.addHelmChart('PrometheusChart', {
