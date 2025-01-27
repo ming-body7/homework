@@ -7,25 +7,22 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.example.demo.frauddetection.TransactionFraudDetector;
 
 @RestController
 @RequestMapping("/api")
 public class FraudDetectionController {
 
+    private final TransactionFraudDetector fraudDetector;
+
+    public FraudDetectionController(TransactionFraudDetector fraudDetector) {
+        this.fraudDetector = fraudDetector;
+    }
+
     @PostMapping("/detect")
     public ResponseEntity<TransactionFraudDetectionResponse> detectFraud(
             @RequestBody TransactionFraudDetectionRequest request) {
-        
-        // Create response object
-        TransactionFraudDetectionResponse response = new TransactionFraudDetectionResponse();
-        response.setTransactionId(request.getTransactionId());
-        
-        // TODO: Add actual fraud detection logic here
-        // This is a placeholder implementation
-        response.setFraudulent(false);
-        response.setRiskScore("LOW");
-        response.setMessage("Transaction appears legitimate");
-        
+        TransactionFraudDetectionResponse response = fraudDetector.detectFraud(request);
         return ResponseEntity.ok(response);
     }
 }
