@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -20,15 +21,12 @@ public class TestController {
     private final MeterRegistry meterRegistry;
     private final Counter requestCounter;
 
+    @Autowired
     public TestController(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
-        this.requestCounter = Counter.builder("test.counter.endpoint")
-                .description("Count of calls to this endpoint")
-                .register(meterRegistry);
+        this.requestCounter = meterRegistry.counter("test.controller.requests");
     }
 
-    @Timed(value = "test.timed.endpoint", description = "Time taken to handle the request")
-    @Counted(value = "test.counted.endpoint", description = "Count of calls to this endpoint")
     @GetMapping("/test")
     public String test() {
         logger.info("test controller");

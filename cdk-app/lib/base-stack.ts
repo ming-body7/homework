@@ -146,20 +146,8 @@ export class BaseStack extends cdk.Stack {
       },
     };
 
-    // ClusterIP Service for Prometheus
-    const metricsServiceManifest = {
-      apiVersion: 'v1',
-      kind: 'Service',
-      metadata: { name: 'springboot-app-internal' },
-      spec: {
-        type: 'ClusterIP',
-        ports: [{ protocol: 'TCP', port: 8080, targetPort: 8080 }],
-        selector: { app: 'springboot-app' },
-      },
-    };
-
     // Apply the Kubernetes manifest to the cluster
-    const springBootApp = cluster.addManifest('SpringBootApp', appManifest, serviceManifest, metricsServiceManifest);
+    const springBootApp = cluster.addManifest('SpringBootApp', appManifest, serviceManifest);
 
 
     // Grant the EKS node group permissions to pull from ECR
@@ -171,6 +159,7 @@ export class BaseStack extends cdk.Stack {
       name: 'app-service-account',
       namespace: 'default'
     });
+    serviceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
 
     // Grant SQS permissions to the service account
     queue.grantConsumeMessages(serviceAccount);
@@ -220,51 +209,40 @@ export class BaseStack extends cdk.Stack {
         input: {
           tail: {
             enabled: true,
-            path: '/var/log/containers/*.log',
+            path: '/var/log/containers/application*.log',
           },
         },
         cloudWatch: {
           enabled: true,
           region: props.env?.region,
-          logGroup: '/aws/container-logs/application',
-          logStreamPrefix: 'kube/',
+          logGroup: '/MySpringbootApp',
+          logStreamPrefix: 'application-',
           autoCreateGroup: true,
         }
       }
     });
 
-    // Add Prometheus Helm chart with custom config
-    const monitoringNameSpace = cluster.addManifest('MonitoringNamespace', {
-      apiVersion: 'v1',
-      kind: 'Namespace',
-      metadata: { name: 'monitoring' },
+    // cloudwatch metrics
+    const cloudWatchServiceAccount = cluster.addServiceAccount('cloudwatch-sa', {
+      name: 'cloudwatch-service-account',
+      namespace: 'kube-system'
     });
 
-
-    // Deploy Prometheus using Helm and mount the ConfigMap
-    const prometheusChart = cluster.addHelmChart('PrometheusChart', {
-      chart: 'prometheus',
-      repository: 'https://prometheus-community.github.io/helm-charts',
-      release: 'prometheus',
-      namespace: 'monitoring',
-      createNamespace: true,
+    cloudWatchServiceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
+    const cloudwatchChart = cluster.addHelmChart('CloudwatchAgent', {
+      chart: 'aws-cloudwatch-metrics',
+      repository: 'https://aws.github.io/eks-charts',
+      namespace: 'kube-system',
+      createNamespace: false,
       values: {
-        server: {
-          service: {
-            type: 'ClusterIP', // Change to LoadBalancer if external access is required
-            port: 9090,
-            targetPort: 9090,
-          },
+        clusterName: cluster.clusterName,
+        serviceAccount: {
+          create: false,
+          name: cloudWatchServiceAccount.serviceAccountName,
         },
-        extraScrapeConfigs: `
-- job_name: "springboot"
-  metrics_path: "/actuator/prometheus"
-  static_configs:
-    - targets: 
-      - springboot-app-internal.default.svc.cluster.local:8080`
-      },
+      }
     });
-    prometheusChart.node.addDependency(monitoringNameSpace);
+    cloudwatchChart.node.addDependency(cloudWatchServiceAccount);
 
     //Integration test setup
     repository.grantPull(cluster.defaultNodegroup?.role!);
