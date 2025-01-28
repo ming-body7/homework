@@ -10,5 +10,8 @@ export class BootstrapStack extends cdk.Stack {
         const repository = new ecr.Repository(this, 'MyRepository', {
             repositoryName: 'my-springboot-app',
         });
+        const repositoryIntegrationTest = new ecr.Repository(this, 'MyIntegrationTestRepository', {
+            repositoryName: 'my-springboot-integration-test',
+        });
     }
 }

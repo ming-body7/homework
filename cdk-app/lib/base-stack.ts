@@ -249,5 +249,44 @@ export class BaseStack extends cdk.Stack {
       },
     });
     prometheusChart.node.addDependency(monitoringNameSpace);
+
+
+    //Integration test setup
+    repository.grantPull(cluster.defaultNodegroup?.role!);
+
+    if (props.stage == "beta") {
+      const jobManifest = {
+        apiVersion: 'batch/v1',
+        kind: 'Job',
+        metadata: { name: 'integration-test',
+          labels: {
+            deploymentTimestamp: `${Date.now()}`, // Unique label to force recreation
+          },},
+        spec: {
+          ttlSecondsAfterFinished: 60,
+          template: {
+            spec: {
+              containers: [
+                {
+                  name: 'integration-test',
+                  image: `${props.env?.account}.dkr.ecr.${props.env?.region}.amazonaws.com/my-springboot-integration-test:latest`,
+                  env: [
+                    { name: 'SQS_QUEUE_URL', value: queue.queueUrl },
+                    { name: 'LOG_GROUP_NAME', value: 'test' },
+                    { name: 'AWS_REGION', value: `${props.env?.region}` },
+                  ],
+                },
+              ],
+              restartPolicy: 'Never',
+            },
+          },
+          backoffLimit: 0,
+        },
+      };
+
+      // Apply the job manifest to the cluster
+      cluster.addManifest('IntegrationTestJob', jobManifest);
+    }
+
   }
 }

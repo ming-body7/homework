@@ -14,7 +14,6 @@ import static org.mockito.Mockito.*;
 
 
 @ExtendWith(MockitoExtension.class)
-@ActiveProfiles("test")
 public class FraudDetectionControllerTest {
 
     @Mock

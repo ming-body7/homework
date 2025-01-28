@@ -1,127 +1,56 @@
 package integrationtest;
 
-import org.junit.jupiter.api.Tag;
-import org.springframework.boot.test.context.SpringBootTest;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
+import software.amazon.awssdk.services.cloudwatchlogs.model.FilterLogEventsRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
-import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient;
-import software.amazon.awssdk.services.cloudwatchlogs.model.GetLogEventsRequest;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeAll;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-
-import java.net.URI;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-import static org.awaitility.Awaitility.await;
-import static org.assertj.core.api.Assertions.assertThat;
-
-@SpringBootTest
-@Tag("integration")
 public class SqsLogIT {
 
-    private static final int LOCALSTACK_PORT = 4566;
+    public static void main(String[] args) {
+        String sqsQueueUrl = System.getenv("SQS_QUEUE_URL");
+        String logGroupName = System.getenv("LOG_GROUP_NAME");
+        String region = System.getenv("REGION");
 
-    private static final GenericContainer<?> localstack = new GenericContainer<>("localstack/localstack:latest")
-            .withEnv("SERVICES", "sqs,logs")
-            .withExposedPorts(LOCALSTACK_PORT);
-
-    private static SqsClient sqsClient;
-    private static CloudWatchLogsClient logsClient;
-    private static String queueUrl;
-
-    @BeforeAll
-    static void setup() {
-        localstack.start();
-
-        String endpoint = String.format("http://%s:%d",
-                localstack.getHost(),
-                localstack.getMappedPort(LOCALSTACK_PORT));
-
-        // Initialize SQS client
-        sqsClient = SqsClient.builder()
-                .endpointOverride(URI.create(endpoint))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
-                .region(Region.US_EAST_1)
-                .httpClient(UrlConnectionHttpClient.builder().build())
+        // Create clients
+        SqsClient sqsClient = SqsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
 
-        // Initialize CloudWatch Logs client
-        logsClient = CloudWatchLogsClient.builder()
-                .endpointOverride(URI.create(endpoint))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create("test", "test")))
-                .region(Region.US_EAST_1)
-                .httpClient(UrlConnectionHttpClient.builder().build())
+        CloudWatchLogsClient logsClient = CloudWatchLogsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
+
+        // Send message to SQS
+        sendMessage(sqsClient, sqsQueueUrl);
+
+        // Verify logs in CloudWatch
+        boolean logFound = verifyLog(logsClient, logGroupName);
+        if (!logFound) {
+            throw new RuntimeException("Expected log not found in CloudWatch");
+        }
+
+        System.out.println("Integration test passed.");
     }
 
-    @DynamicPropertySource
-    static void registerProperties(DynamicPropertyRegistry registry) {
-        registry.add("aws.sqs.endpoint", () ->
-                String.format("http://%s:%d",
-                        localstack.getHost(),
-                        localstack.getMappedPort(LOCALSTACK_PORT)));
-        registry.add("aws.region", () -> "us-east-1");
-    }
-
-    @Test
-    void shouldProcessSQSMessageAndLogToCloudWatch() {
-        // Send test message
-        String testMessage = "{\"id\":\"123\",\"content\":\"test message\"}";
+    private static void sendMessage(SqsClient sqsClient, String queueUrl) {
         sqsClient.sendMessage(SendMessageRequest.builder()
                 .queueUrl(queueUrl)
-                .messageBody(testMessage)
+                .messageBody("Integration Test Message")
                 .build());
-
-        // Wait for message processing and log generation
-        await()
-                .atMost(30, TimeUnit.SECONDS)
-                .pollInterval(Duration.ofSeconds(2))
-                .untilAsserted(() -> {
-                    // Check CloudWatch logs
-                    var logEvents = logsClient.getLogEvents(GetLogEventsRequest.builder()
-                                    .logGroupName("/aws/eks/your-service-name")
-                                    .logStreamName("your-pod-name")
-                                    .build())
-                            .events();
-
-                    assertThat(logEvents)
-                            .anyMatch(event -> event.message().contains("Message processed successfully"))
-                            .anyMatch(event -> event.message().contains("123")); // Check for message ID
-                });
+        System.out.println("Message sent to SQS.");
     }
 
-    @Test
-    void shouldHandleInvalidMessage() {
-        // Send invalid message
-        String invalidMessage = "invalid json";
-        sqsClient.sendMessage(SendMessageRequest.builder()
-                .queueUrl(queueUrl)
-                .messageBody(invalidMessage)
-                .build());
-
-        // Verify error handling in logs
-        await()
-                .atMost(30, TimeUnit.SECONDS)
-                .pollInterval(Duration.ofSeconds(2))
-                .untilAsserted(() -> {
-                    var logEvents = logsClient.getLogEvents(GetLogEventsRequest.builder()
-                                    .logGroupName("/aws/eks/your-service-name")
-                                    .logStreamName("your-pod-name")
-                                    .build())
-                            .events();
-
-                    assertThat(logEvents)
-                            .anyMatch(event -> event.message().contains("Error processing message"));
-                });
+    private static boolean verifyLog(CloudWatchLogsClient logsClient, String logGroupName) {
+        // Query CloudWatch logs for the test message
+        FilterLogEventsRequest request = FilterLogEventsRequest.builder()
+                .logGroupName(logGroupName)
+                .filterPattern("Integration Test Message")
+                .build();
+        return !logsClient.filterLogEvents(request).events().isEmpty();
     }
 }
