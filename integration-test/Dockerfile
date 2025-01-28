@@ -12,10 +12,10 @@ RUN yum update -y && \
     yum clean all
 
 # Copy the Spring Boot JAR file into the image
-COPY target/*.jar /app/my-springboot-integrationt-test.jar
+COPY target/*.jar /app/my-springboot-integration-test.jar
 
 # Expose the port your Spring Boot application listens on
-EXPOSE 8080
+#EXPOSE 8080
 
 # Run the Spring Boot application
-ENTRYPOINT ["java", "-jar", "/app/my-springboot-integration-test.jar"]
+#ENTRYPOINT ["java", "-jar", "/app/my-springboot-integration-test.jar"]

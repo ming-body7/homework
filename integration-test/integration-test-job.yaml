@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: integration-test-job
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+        - name: integration-test
+          image: "651706779316.dkr.ecr.us-west-2.amazonaws.com/my-springboot-integration-test"
+          command: ["java", "-jar", "/app/my-springboot-integration-test.jar"]
+          # command: [ "/bin/sh", "-c", "echo Running integration tests && sleep 3600" ] # Sleep for 1 hour
+          env:
+            - name: SQS_QUEUE_URL
+              value: https://sqs.us-west-2.amazonaws.com/651706779316/beta-demo-message-queue
+            - name: LOG_GROUP_NAME
+              value: test-log-group
+            - name: AWS_REGION
+              value: us-west-2
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      restartPolicy: Never # Ensures the container does not restart
