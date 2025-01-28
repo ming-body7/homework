@@ -4,9 +4,10 @@ metadata:
   name: integration-test-job
 spec:
   ttlSecondsAfterFinished: 600
-  backoffLimit: 1
+  backoffLimit: 0
   template:
     spec:
+      serviceAccountName: integration-test-sa
       containers:
         - name: integration-test
           image: "651706779316.dkr.ecr.us-west-2.amazonaws.com/my-springboot-integration-test"

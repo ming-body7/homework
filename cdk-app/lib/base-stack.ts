@@ -190,6 +190,19 @@ export class BaseStack extends cdk.Stack {
     });
     fluentBitServiceAccount.addToPrincipalPolicy(cloudWatchLogsPolicy);
 
+    const integrationTestServiceAccount = cluster.addServiceAccount('IntegrationTestServiceAccount', {
+      name: 'integration-test-sa',
+      namespace: 'default',
+    });
+    const sqsAdminPolicy = new iam.PolicyStatement({
+      actions:  [
+        "sqs:*"
+      ],
+      resources: [queue.queueArn]
+    });
+    integrationTestServiceAccount.addToPrincipalPolicy(cloudWatchLogsPolicy);
+    integrationTestServiceAccount.addToPrincipalPolicy(sqsAdminPolicy);
+
     //use helm to install fluent-bit
     const fluentBitHelmChart = cluster.addHelmChart('FluentBit', {
       chart: 'aws-for-fluent-bit',

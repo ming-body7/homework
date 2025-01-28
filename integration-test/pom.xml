@@ -49,6 +49,11 @@
         <!-- AWS SDK for SQS and CloudWatch Logs -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
+            <version>2.20.13</version> <!-- need be exact same version as other aws sdk-->
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
             <artifactId>sqs</artifactId>
             <version>2.20.13</version>
         </dependency>
@@ -56,6 +61,12 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>cloudwatchlogs</artifactId>
             <version>2.20.13</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-core</artifactId>
+            <version>1.12.562</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 
