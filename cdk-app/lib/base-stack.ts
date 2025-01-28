@@ -3,6 +3,9 @@ import * as eks from 'aws-cdk-lib/aws-eks';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import { aws_fis as fis } from "aws-cdk-lib";
 import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
 import { Construct } from 'constructs';
 
@@ -265,5 +268,123 @@ export class BaseStack extends cdk.Stack {
 
     //Integration test setup
     repository.grantPull(cluster.defaultNodegroup?.role!);
+
+    //Resilience test setup
+    // Import FIS Role and Stop Condition
+    // Create a new IAM Role
+    const fisExperimentRole = new iam.Role(this, 'FISExperimentRole', {
+      assumedBy: new iam.ServicePrincipal('fis.amazonaws.com'), // FIS service assumes this role
+      description: 'Role for AWS Fault Injection Simulator (FIS) experiments',
+    });
+
+    // Add permissions to the role
+    fisExperimentRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'fis:CreateExperimentTemplate',
+            'fis:StartExperiment',
+            'fis:StopExperiment',
+            'fis:ListExperiments',
+            'fis:GetExperiment',
+          ],
+          resources: ['*'], // Restrict resource access as needed
+        })
+    );
+
+    // Optional: Add additional permissions, such as for managing EKS resources
+    fisExperimentRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'eks:DescribeCluster',
+            'eks:ListClusters',
+            'eks:AccessKubernetesApi',
+          ],
+          resources: ['*'], // Restrict resource access as needed
+        })
+    );
+
+    // Create an SNS Topic for alarm notifications
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: 'CloudWatch Alarm Notifications',
+    });
+
+    // Add an email subscription to the SNS topic
+    // alarmTopic.addSubscription(
+    //     new snsSubscriptions.EmailSubscription('your-email@example.com')
+    // );
+
+    // Define a CloudWatch metric (e.g., CPUUtilization)
+    const cpuUtilizationMetric = new cloudwatch.Metric({
+      namespace: 'AWS/EC2',
+      metricName: 'CPUUtilization',
+      dimensionsMap: {
+        InstanceId: 'i-1234567890abcdef', // Replace with your instance ID
+      },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+    });
+
+    // Create a CloudWatch alarm for the metric
+   const highCpuAlarm = new cloudwatch.Alarm(this, 'HighCpuAlarm', {
+      metric: cpuUtilizationMetric,
+      threshold: 80, // Trigger when CPU utilization is >80%
+      evaluationPeriods: 3, // Number of periods to evaluate before triggering
+      datapointsToAlarm: 2, // Number of datapoints within evaluation periods to trigger the alarm
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'Alarm if CPU utilization exceeds 80% for EC2 instance.',
+      actionsEnabled: true
+    });
+
+    const stopConditionArn = highCpuAlarm.alarmArn; //need update to eks or service alarm
+
+    // Targets
+    const targetEKSCluster: fis.CfnExperimentTemplate.ExperimentTemplateTargetProperty =
+        {
+          resourceType: "aws:eks:nodegroup",
+          selectionMode: "ALL",
+          resourceTags: {
+            "eksctl.cluster.k8s.io/v1alpha1/cluster-name":
+                cluster.toString(),
+          },
+        };
+
+    // Actions
+    const terminateNodeGroupInstance: fis.CfnExperimentTemplate.ExperimentTemplateActionProperty =
+        {
+          actionId: "aws:eks:terminate-nodegroup-instances",
+          parameters: {
+            instanceTerminationPercentage: "50",
+          },
+          targets: {
+            Nodegroups: "nodeGroupTarget",
+          },
+        };
+
+    // Experiments
+    const templateEksTerminateNodeGroup = new fis.CfnExperimentTemplate(
+        this,
+        "fis-eks-terminate-node-group",
+        {
+          description:
+              "Terminate 50 per cent instances on the EKS target node group.",
+          roleArn: fisExperimentRole.roleArn.toString(),
+          stopConditions: [
+            {
+              source: "aws:cloudwatch:alarm",
+              value: stopConditionArn.toString(),
+            },
+          ],
+          tags: {
+            Name: "Terminate 50 per cent instances on the EKS target node group",
+            Stackname: this.stackName,
+          },
+          actions: {
+            nodeGroupActions: terminateNodeGroupInstance,
+          },
+          targets: {
+            nodeGroupTarget: targetEKSCluster,
+          },
+        }
+    );
   }
 }
