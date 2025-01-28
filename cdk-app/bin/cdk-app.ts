@@ -14,7 +14,7 @@ new BootstrapStack(app, 'BoostrapStack', {
 });
 
 // Deploy beta stage
-new BaseStack(app, 'BetaStack5', {
+new BaseStack(app, 'BetaStack', {
   stage: 'beta',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
