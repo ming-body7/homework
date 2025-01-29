@@ -17,7 +17,7 @@ spec:
             - name: SQS_QUEUE_URL
               value: https://sqs.us-west-2.amazonaws.com/651706779316/beta-demo-message-queue
             - name: LOG_GROUP_NAME
-              value: test-log-group
+              value: /aws/eks/fluentbit-cloudwatch/logs
             - name: AWS_REGION
               value: us-west-2
           resources:

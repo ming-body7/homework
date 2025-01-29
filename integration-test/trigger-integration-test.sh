@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Replace this with your Job name
-JOB_NAME="your-job-name"
+JOB_NAME="integration-test-job"
 NAMESPACE="default" # Update if your Job is in a different namespace
 
 # Get the pod name associated with the Job

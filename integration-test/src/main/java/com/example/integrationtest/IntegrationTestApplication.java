@@ -31,37 +31,41 @@ public class IntegrationTestApplication implements CommandLineRunner {
         System.out.println("Log Group Name: " + logGroupName);
         System.out.println("AWS Region: " + region);
 
-        System.out.println("Integration test completed successfully!");
-
         // Create clients
         SqsClient sqsClient = SqsClient.builder()
                 .region(Region.of(region))
                 .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
 
-//        CloudWatchLogsClient logsClient = CloudWatchLogsClient.builder()
-//                .region(Region.of(region))
-//                .credentialsProvider(DefaultCredentialsProvider.create())
-//                .build();
+        CloudWatchLogsClient logsClient = CloudWatchLogsClient.builder()
+                .region(Region.of(region))
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .build();
 
         // Send message to SQS
         sendMessage(sqsClient, sqsQueueUrl);
 
-        // Verify logs in CloudWatch
-//        boolean logFound = verifyLog(logsClient, logGroupName);
-//        if (!logFound) {
-//            throw new RuntimeException("Expected log not found in CloudWatch");
-//        }
+        // wait for log processed
         Thread.sleep(10000);
+
+        // Verify logs in CloudWatch
+        boolean logFound = verifyLog(logsClient, logGroupName);
+        if (!logFound) {
+            System.out.println("Expected log not found in CloudWatch");
+            System.exit(1); // Exit to ensure the pod terminates
+        }
+
 
         System.out.println("Integration test passed.");
         System.exit(0); // Exit to ensure the pod terminates
     }
 
     private static void sendMessage(SqsClient sqsClient, String queueUrl) {
+        String messageBody = "{\"transaction\":{\"transactionId\":\"TXN123456789\",\"amount\":12501.75,\"currency\":\"USD\",\"merchantId\":\"MERCHANT987654\",\"cardNumber\":\"4111111111111111\",\"timestamp\":\"2025-01-24T10:15:30Z\"}}";
+
         sqsClient.sendMessage(SendMessageRequest.builder()
                 .queueUrl(queueUrl)
-                .messageBody("Integration Test Message")
+                .messageBody(messageBody)
                 .build());
         System.out.println("Message sent to SQS.");
     }
@@ -70,7 +74,9 @@ public class IntegrationTestApplication implements CommandLineRunner {
         // Query CloudWatch logs for the test message
         FilterLogEventsRequest request = FilterLogEventsRequest.builder()
                 .logGroupName(logGroupName)
-                .filterPattern("Integration Test Message")
+                .filterPattern("TXN123456789")
+                .startTime(System.currentTimeMillis() - 120000) // 2 minute ago
+                .endTime(System.currentTimeMillis() + 60000)
                 .build();
         return !logsClient.filterLogEvents(request).events().isEmpty();
     }

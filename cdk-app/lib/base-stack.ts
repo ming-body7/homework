@@ -175,6 +175,7 @@ export class BaseStack extends cdk.Stack {
         'logs:CreateLogStream',
         'logs:PutLogEvents',
         'logs:DescribeLogStreams',
+        'logs:FilterLogEvents' //add for integration test
       ],
       resources: ["arn:aws:logs:*:*:*"]
     });
@@ -191,15 +192,9 @@ export class BaseStack extends cdk.Stack {
           create: false,
           name: fluentBitServiceAccount.serviceAccountName,
         },
-        input: {
-          enabled: true,
-          path: '/var/log/containers/application*.log',
-        },
-        cloudWatchLogs: {
+        cloudWatch: {
           enabled: true,
           region: props.env?.region,
-          logGroupName: '/MySpringbootApp',
-          logStreamName: 'application-logs',
           autoCreateGroup: true,
         }
       }
