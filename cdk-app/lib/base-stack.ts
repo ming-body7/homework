@@ -3,8 +3,8 @@ import * as eks from 'aws-cdk-lib/aws-eks';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch'
 import { aws_fis as fis } from "aws-cdk-lib";
 import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
 import { Construct } from 'constructs';
@@ -41,7 +41,7 @@ export class BaseStack extends cdk.Stack {
       kubectlLayer: new KubectlV31Layer(this, 'KubectlLayer'),
       vpc: vpc,
       vpcSubnets: [{ subnetType: cdk.aws_ec2.SubnetType.PRIVATE_WITH_EGRESS }],
-      defaultCapacity: 1,
+      defaultCapacity: 3,
       defaultCapacityInstance: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.T3,
         cdk.aws_ec2.InstanceSize.XLARGE
@@ -121,7 +121,7 @@ export class BaseStack extends cdk.Stack {
       kind: 'Deployment',
       metadata: { name: 'springnoot-app', namespace: 'default' },
       spec: {
-        replicas: 1,
+        replicas: 2,
         selector: { matchLabels: { app: 'springboot-app' } },
         template: {
           metadata: { labels: { app: 'springboot-app' } },
@@ -274,57 +274,49 @@ export class BaseStack extends cdk.Stack {
         })
     );
 
+    // alarm and sns to notify fraud transaction
+    const fraudMetric = new cloudwatch.Metric({
+      namespace: 'MySpringbootApp', // Replace with your CloudWatch namespace
+      metricName: 'transaction.detector.count',
+      dimensionsMap: {
+        status: 'fraud', // Filters only data points with status=fraud
+      },
+      statistic: 'Sum', // Aggregates the sum
+      period: cdk.Duration.minutes(5), // 5-minute evaluation window
+    });
+    new cloudwatch.Alarm(this, 'FraudTransactionAlarm', {
+      metric: fraudMetric,
+      threshold: 1, // Alarm triggers when sum > 1
+      evaluationPeriods: 1, // Evaluates over 1 period (5 minutes)
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'Alarm when transaction.detector.count with status=fraud exceeds 1',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING, // Prevents false alarms
+    });
     // Create an SNS Topic for alarm notifications
-    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+    const alarmTopic = new sns.Topic(this, 'FraudTransactionTopic', {
       displayName: 'CloudWatch Alarm Notifications',
     });
 
-    // Add an email subscription to the SNS topic
-    // alarmTopic.addSubscription(
-    //     new snsSubscriptions.EmailSubscription('your-email@example.com')
-    // );
 
-    // Define a CloudWatch metric (e.g., CPUUtilization)
-    const cpuUtilizationMetric = new cloudwatch.Metric({
-      namespace: 'AWS/EC2',
-      metricName: 'CPUUtilization',
-      dimensionsMap: {
-        InstanceId: 'i-1234567890abcdef', // Replace with your instance ID
-      },
-      statistic: 'Average',
-      period: cdk.Duration.minutes(5),
-    });
-
-    // Create a CloudWatch alarm for the metric
-   const highCpuAlarm = new cloudwatch.Alarm(this, 'HighCpuAlarm', {
-      metric: cpuUtilizationMetric,
-      threshold: 80, // Trigger when CPU utilization is >80%
-      evaluationPeriods: 3, // Number of periods to evaluate before triggering
-      datapointsToAlarm: 2, // Number of datapoints within evaluation periods to trigger the alarm
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      alarmDescription: 'Alarm if CPU utilization exceeds 80% for EC2 instance.',
-      actionsEnabled: true
-    });
-
-    const stopConditionArn = highCpuAlarm.alarmArn; //need update to eks or service alarm
-
+    // FIS resilience test
     // Targets
     const targetEKSCluster: fis.CfnExperimentTemplate.ExperimentTemplateTargetProperty =
         {
           resourceType: "aws:eks:nodegroup",
           selectionMode: "ALL",
           resourceTags: {
-            "eksctl.cluster.k8s.io/v1alpha1/cluster-name":
-                cluster.toString(),
+            "aws:cloudformation:stack-name":
+                this.stackId,
           },
         };
+
 
     // Actions
     const terminateNodeGroupInstance: fis.CfnExperimentTemplate.ExperimentTemplateActionProperty =
         {
           actionId: "aws:eks:terminate-nodegroup-instances",
           parameters: {
-            instanceTerminationPercentage: "50",
+            instanceTerminationPercentage: "40",
           },
           targets: {
             Nodegroups: "nodeGroupTarget",
@@ -340,9 +332,10 @@ export class BaseStack extends cdk.Stack {
               "Terminate 50 per cent instances on the EKS target node group.",
           roleArn: fisExperimentRole.roleArn.toString(),
           stopConditions: [
+              //TODO: update to other alarm like CPU/MEM/Availibality
             {
-              source: "aws:cloudwatch:alarm",
-              value: stopConditionArn.toString(),
+              "source": "aws:fis:experiment",
+              "value": "duration=300"
             },
           ],
           tags: {
