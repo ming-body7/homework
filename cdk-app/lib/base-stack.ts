@@ -6,7 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { aws_fis as fis } from "aws-cdk-lib";
-import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
+import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
 import { Construct } from 'constructs';
 
 export interface BaseStackProps extends cdk.StackProps {
@@ -37,8 +37,8 @@ export class BaseStack extends cdk.Stack {
 
     // Create EKS Cluster
     const cluster = new eks.Cluster(this, `${props.stage}Cluster`, {
-      version: eks.KubernetesVersion.V1_28,
-      kubectlLayer: new KubectlV28Layer(this, 'KubectlLayer'),
+      version: eks.KubernetesVersion.V1_31,
+      kubectlLayer: new KubectlV31Layer(this, 'KubectlLayer'),
       vpc: vpc,
       vpcSubnets: [{ subnetType: cdk.aws_ec2.SubnetType.PRIVATE_WITH_EGRESS }],
       defaultCapacity: 1,
@@ -48,7 +48,20 @@ export class BaseStack extends cdk.Stack {
       ),
     });
 
+    // Reference the existing IAM user by its name
+    const existingIamUser = iam.User.fromUserName(this, `arn:aws:iam::${props.env?.account}:user/cdk-user`, 'cdk-user'); // Replace with your IAM user name
+
+    // Add the IAM user to the aws-auth ConfigMap with system:masters (admin access)
+    cluster.awsAuth.addUserMapping(existingIamUser, {
+      username: 'cdk-user',
+      groups: ['system:masters'], // Full cluster admin access
+    });
+
     // T3 type host use EBS, need EBS CSI Driver
+    const ebsServiceAccount = cluster.addServiceAccount('EBSServiceAccount', {
+      name: 'ebs-csi-controller-sa',
+      namespace: 'kube-system',
+    });
     // Create IAM Policy for the EBS CSI Driver
     const ebsPolicy = new iam.PolicyStatement({
       actions: [
@@ -66,14 +79,8 @@ export class BaseStack extends cdk.Stack {
       ],
       resources: ['*'],
     });
-
-    // Attach the IAM policy to the service account
-    const ebsServiceAccount = cluster.addServiceAccount('EBSServiceAccount', {
-      name: 'ebs-csi-controller-sa',
-      namespace: 'kube-system'
-    });
     ebsServiceAccount.addToPrincipalPolicy(ebsPolicy);
-
+    ebsServiceAccount.node.addDependency(cluster.awsAuth);
     // Add the Helm chart for the EBS CSI Driver
     const ebsCsiDriver = cluster.addHelmChart('aws-ebs-csi-driver', {
       chart: 'aws-ebs-csi-driver',
@@ -82,10 +89,10 @@ export class BaseStack extends cdk.Stack {
       release: 'aws-ebs-csi-driver',
       values: {
         controller: {
-          replicas: 1,
+          replicaCount: 1,  //increase if need
           serviceAccount: {
             create: false,
-            name: 'ebs-csi-controller-sa',
+            name: ebsServiceAccount.serviceAccountName,
           },
         },
       },
@@ -98,16 +105,17 @@ export class BaseStack extends cdk.Stack {
       visibilityTimeout: cdk.Duration.seconds(300),
     });
 
-    // Reference the existing IAM user by its name
-    const existingIamUser = iam.User.fromUserName(this, `arn:aws:iam::${props.env?.account}:user/cdk-user`, 'cdk-user'); // Replace with your IAM user name
-
-    // Add the IAM user to the aws-auth ConfigMap with system:masters (admin access)
-    cluster.awsAuth.addUserMapping(existingIamUser, {
-      username: 'cdk-user',
-      groups: ['system:masters'], // Full cluster admin access
-    });
 
     // Define Kubernetes deployment and service manifest
+    // Create service account for pod identity
+    const appServiceAccount = cluster.addServiceAccount('app-service-account', {
+      name: 'app-service-account',
+      namespace: 'default'
+    });
+    appServiceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
+    appServiceAccount.node.addDependency(cluster.awsAuth);
+    // Grant SQS permissions to the service account
+    queue.grantConsumeMessages(appServiceAccount);
     const appManifest = {
       apiVersion: 'apps/v1',
       kind: 'Deployment',
@@ -118,7 +126,7 @@ export class BaseStack extends cdk.Stack {
         template: {
           metadata: { labels: { app: 'springboot-app' } },
           spec: {
-            serviceAccountName: 'app-service-account',
+            serviceAccountName: appServiceAccount.serviceAccountName,
             containers: [{
               name: 'springboot-app',
               image: `${props.env?.account}.dkr.ecr.${props.env?.region}.amazonaws.com/my-springboot-app:latest`,
@@ -146,25 +154,15 @@ export class BaseStack extends cdk.Stack {
       },
     };
 
+
     // Apply the Kubernetes manifest to the cluster
     const springBootApp = cluster.addManifest('SpringBootApp', appManifest, serviceManifest);
-
+    springBootApp.node.addDependency(appServiceAccount);
 
     // Grant the EKS node group permissions to pull from ECR
     const repository = ecr.Repository.fromRepositoryArn(this, "id", "arn:aws:ecr:us-west-2:651706779316:repository/my-springboot-app");
     repository.grantPull(cluster.defaultNodegroup?.role!);
 
-    // Create service account for pod identity
-    const serviceAccount = cluster.addServiceAccount('app-service-account', {
-      name: 'app-service-account',
-      namespace: 'default'
-    });
-    serviceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
-
-    // Grant SQS permissions to the service account
-    queue.grantConsumeMessages(serviceAccount);
-
-    springBootApp.node.addDependency(serviceAccount);
 
     const fluentBitServiceAccount = cluster.addServiceAccount('FluentBitServiceAccount', {
       name: 'fluent-bit',
@@ -181,6 +179,31 @@ export class BaseStack extends cdk.Stack {
       resources: ["arn:aws:logs:*:*:*"]
     });
     fluentBitServiceAccount.addToPrincipalPolicy(cloudWatchLogsPolicy);
+    fluentBitServiceAccount.node.addDependency(cluster.awsAuth);
+    //use helm to install fluent-bit
+    const fluentBitHelmChart = cluster.addHelmChart('FluentBit', {
+      chart: 'aws-for-fluent-bit',
+      release: 'fluent-bit',
+      repository: 'https://aws.github.io/eks-charts',
+      namespace: 'kube-system',
+      values: {
+        serviceAccount: {
+          create: false,
+          name: fluentBitServiceAccount.serviceAccountName,
+        },
+        input: {
+          enabled: true,
+          path: '/var/log/containers/application*.log',
+        },
+        cloudWatchLogs: {
+          enabled: true,
+          region: props.env?.region,
+          logGroupName: '/MySpringbootApp',
+          logStreamName: 'application-logs',
+          autoCreateGroup: true,
+        }
+      }
+    });
 
     const integrationTestServiceAccount = cluster.addServiceAccount('IntegrationTestServiceAccount', {
       name: 'integration-test-sa',
@@ -194,34 +217,7 @@ export class BaseStack extends cdk.Stack {
     });
     integrationTestServiceAccount.addToPrincipalPolicy(cloudWatchLogsPolicy);
     integrationTestServiceAccount.addToPrincipalPolicy(sqsAdminPolicy);
-
-    //use helm to install fluent-bit
-    const fluentBitHelmChart = cluster.addHelmChart('FluentBit', {
-      chart: 'aws-for-fluent-bit',
-      release: 'fluent-bit',
-      repository: 'https://aws.github.io/eks-charts',
-      namespace: 'kube-system',
-      values: {
-        serviceAccount: {
-          create: false,
-          name: fluentBitServiceAccount.serviceAccountName,
-        },
-        input: {
-          tail: {
-            enabled: true,
-            path: '/var/log/containers/application*.log',
-          },
-        },
-        cloudWatch: {
-          enabled: true,
-          region: props.env?.region,
-          logGroup: '/MySpringbootApp',
-          logStreamPrefix: 'application-',
-          autoCreateGroup: true,
-        }
-      }
-    });
-
+    integrationTestServiceAccount.node.addDependency(cluster.awsAuth);
     // cloudwatch metrics
     const cloudWatchServiceAccount = cluster.addServiceAccount('cloudwatch-sa', {
       name: 'cloudwatch-service-account',
@@ -229,6 +225,8 @@ export class BaseStack extends cdk.Stack {
     });
 
     cloudWatchServiceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
+    cloudWatchServiceAccount.node.addDependency(cluster.awsAuth);
+
     const cloudwatchChart = cluster.addHelmChart('CloudwatchAgent', {
       chart: 'aws-cloudwatch-metrics',
       repository: 'https://aws.github.io/eks-charts',

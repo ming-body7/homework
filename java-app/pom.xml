@@ -199,6 +199,10 @@
                 <version>3.5.2</version>
                 <configuration>
                     <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
+                    <excludes>
+                        <exclude>com/example/demo/config/**</exclude>
+                        <exclude>com/example/demo/datamodel/**</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
@@ -225,6 +229,12 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                        <configuration>
+                            <excludes>
+                                <exclude>com/example/demo/config/**</exclude>
+                                <exclude>com/example/demo/datamodel/**</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

@@ -25,6 +25,11 @@ java -jar target/demo-0.0.1-SNAPSHOT.jar
 ```bash
 mvn test
 ```
+## generate report:
+mvn clean test
+mvn jacoco:report
+
+
 
 ## Project Structure
 - `src/main/java` - Application source code
