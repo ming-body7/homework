@@ -27,6 +27,6 @@ export class IntegrationTestStack extends cdk.NestedStack {
         });
         integrationTestServiceAccount.addToPrincipalPolicy(cloudWatchLogsPolicy);
         integrationTestServiceAccount.addToPrincipalPolicy(sqsAdminPolicy);
-        integrationTestServiceAccount.node.addDependency(props.cluster.awsAuth);
+        integrationTestServiceAccount.node.addDependency(props.cluster);
     }
 }

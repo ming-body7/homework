@@ -37,7 +37,7 @@ export class ObservabilityStack extends cdk.NestedStack {
                 },
                 cloudWatch: {
                     enabled: true,
-                    region: props.env?.region,
+                    region: props.cluster.env.region,
                     autoCreateGroup: true,
                 }
             }
@@ -50,7 +50,7 @@ export class ObservabilityStack extends cdk.NestedStack {
         });
 
         cloudWatchServiceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
-        cloudWatchServiceAccount.node.addDependency(props.cluster.awsAuth);
+        cloudWatchServiceAccount.node.addDependency(props.cluster);
 
         const cloudwatchChart = props.cluster.addHelmChart('CloudwatchAgent', {
             chart: 'aws-cloudwatch-metrics',

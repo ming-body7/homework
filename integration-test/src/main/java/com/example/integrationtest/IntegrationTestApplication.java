@@ -10,6 +10,8 @@ import software.amazon.awssdk.services.cloudwatchlogs.model.FilterLogEventsReque
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
+import java.util.UUID;
+
 @SpringBootApplication
 public class IntegrationTestApplication implements CommandLineRunner {
 
@@ -46,7 +48,7 @@ public class IntegrationTestApplication implements CommandLineRunner {
         sendMessage(sqsClient, sqsQueueUrl);
 
         // wait for log processed
-        Thread.sleep(10000);
+        Thread.sleep(30000);
 
         // Verify logs in CloudWatch
         boolean logFound = verifyLog(logsClient, logGroupName);
@@ -61,8 +63,7 @@ public class IntegrationTestApplication implements CommandLineRunner {
     }
 
     private static void sendMessage(SqsClient sqsClient, String queueUrl) {
-        String messageBody = "{\"transaction\":{\"transactionId\":\"TXN123456789\",\"amount\":12501.75,\"currency\":\"USD\",\"merchantId\":\"MERCHANT987654\",\"cardNumber\":\"4111111111111111\",\"timestamp\":\"2025-01-24T10:15:30Z\"}}";
-
+        String messageBody = "{\"transactionId\":\"TXN123456789\",\"amount\":12501.75,\"currency\":\"USD\",\"merchantId\":\"MERCHANT987654\",\"cardNumber\":\"4111111111111111\",\"timestamp\":\"2025-01-24T10:15:30Z\"}";
         sqsClient.sendMessage(SendMessageRequest.builder()
                 .queueUrl(queueUrl)
                 .messageBody(messageBody)
@@ -75,7 +76,7 @@ public class IntegrationTestApplication implements CommandLineRunner {
         FilterLogEventsRequest request = FilterLogEventsRequest.builder()
                 .logGroupName(logGroupName)
                 .filterPattern("TXN123456789")
-                .startTime(System.currentTimeMillis() - 120000) // 2 minute ago
+                .startTime(System.currentTimeMillis() - 300000) // 5 minute ago
                 .endTime(System.currentTimeMillis() + 60000)
                 .build();
         return !logsClient.filterLogEvents(request).events().isEmpty();

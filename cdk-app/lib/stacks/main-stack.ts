@@ -7,7 +7,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { KubectlV31Layer } from '@aws-cdk/lambda-layer-kubectl-v31';
 
-export interface InfraStackProps extends cdk.StackProps {
+export interface MainStackProps extends cdk.StackProps {
     stage: string;
 }
 
@@ -18,7 +18,7 @@ export class MainStack extends cdk.NestedStack {
     public readonly baseIamUser: iam.IUser;
     public readonly repository: ecr.IRepository
 
-    constructor(scope: Construct, id: string, props: InfraStackProps) {
+    constructor(scope: Construct, id: string, props: MainStackProps) {
         super(scope, id, props);
 
         this.vpc = new ec2.Vpc(this, 'EksVpc', {
@@ -47,8 +47,8 @@ export class MainStack extends cdk.NestedStack {
             queueName: `${props.stage}-demo-message-queue`,
             visibilityTimeout: cdk.Duration.seconds(300),
         });
-
-        this.baseIamUser = iam.User.fromUserName(this, `arn:aws:iam::${props.env?.account}:user/cdk-user`, 'cdk-user');
+        this.cluster.env.region
+        this.baseIamUser = iam.User.fromUserName(this, `arn:aws:iam::${this.cluster.env.region}:user/cdk-user`, 'cdk-user');
 
         // Add the IAM user to the aws-auth ConfigMap with system:masters (admin access)
         this.cluster.awsAuth.addUserMapping(this.baseIamUser, {
@@ -74,7 +74,7 @@ export class MainStack extends cdk.NestedStack {
         const springBootAppDeployment = {
             apiVersion: 'apps/v1',
             kind: 'Deployment',
-            metadata: { name: 'springnoot-app', namespace: 'default' },
+            metadata: { name: 'springboot-app', namespace: 'default' },
             spec: {
                 replicas: 2,
                 selector: { matchLabels: { app: 'springboot-app' } },
@@ -84,10 +84,10 @@ export class MainStack extends cdk.NestedStack {
                         serviceAccountName: appServiceAccount.serviceAccountName,
                         containers: [{
                             name: 'springboot-app',
-                            image: `${props.env?.account}.dkr.ecr.${props.env?.region}.amazonaws.com/my-springboot-app:latest`,
+                            image: `${props.env?.account}.dkr.ecr.${this.cluster.env.region}.amazonaws.com/my-springboot-app:latest`,
                             ports: [{ containerPort: 8080 }],
                             env: [
-                                { name: 'CLOUD_AWS_REGION_STATIC', value: props.env?.region },
+                                { name: 'CLOUD_AWS_REGION_STATIC', value: this.cluster.env.region },
                                 { name: 'CLOUD_AWS_SQS_QUEUE_NAME', value: this.sqsQueue.queueName }
                             ]
                         }]
@@ -104,44 +104,7 @@ export class MainStack extends cdk.NestedStack {
             namespace: 'kube-system',
         });
 
-        // const springBootAppHPA = new eks.HelmChart(this, "HPAChart", {
-        //     cluster: this.cluster,
-        //     chart: "hpa",
-        //     repository: "https://charts.bitnami.com/bitnami",
-        //     release: "hpa",
-        //     namespace: "default",
-        //     values: {
-        //         apiVersion: "autoscaling/v2",
-        //         kind: "HorizontalPodAutoscaler",
-        //         metadata: {
-        //             name: "spring-boot-app-hpa",
-        //         },
-        //         spec: {
-        //             scaleTargetRef: {
-        //                 apiVersion: "apps/v1",
-        //                 kind: "Deployment",
-        //                 name: "spring-boot-app",
-        //             },
-        //             minReplicas: 2,
-        //             maxReplicas: 10,
-        //             metrics: [
-        //                 {
-        //                     type: "Resource",
-        //                     resource: {
-        //                         name: "cpu",
-        //                         target: {
-        //                             type: "Utilization",
-        //                             averageUtilization: 50,
-        //                         },
-        //                     },
-        //                 },
-        //             ],
-        //         },
-        //     },
-        // });
-        // springBootAppHPA.node.addDependency(metricsService);
-
-        const hpaManifest = {
+        const springBootAppHPA = {
             apiVersion: 'autoscaling/v2',
             kind: 'HorizontalPodAutoscaler',
             metadata: {
@@ -171,11 +134,6 @@ export class MainStack extends cdk.NestedStack {
             },
         };
 
-        // // Deploy the HPA using CDK
-        // new eks.KubernetesManifest(this, 'SpringBootHpa', {
-        //     cluster,
-        //     manifest: [hpaManifest],
-        // });
 
         const springBootAppService = {
             apiVersion: 'v1',
@@ -191,9 +149,9 @@ export class MainStack extends cdk.NestedStack {
         };
 
         // Apply the Kubernetes manifest to the cluster
-        const springBootApp = this.cluster.addManifest('SpringBootApp', springBootAppDeployment, hpaManifest, springBootAppService);
+        const springBootApp = this.cluster.addManifest('SpringBootApp', springBootAppDeployment, springBootAppHPA, springBootAppService);
         springBootApp.node.addDependency(appServiceAccount);
-        appServiceAccount.node.addDependency(this.cluster.awsAuth);
+        appServiceAccount.node.addDependency(this.cluster);
 
     }
 }

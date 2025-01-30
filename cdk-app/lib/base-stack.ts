@@ -16,36 +16,36 @@ export class BaseStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: BaseStackProps) {
     super(scope, id, props);
 
-    const infraStack = new MainStack(this, 'MainStack', {
+    const mainStack = new MainStack(this, 'MainStack', {
       stage: props.stage,
       env: props.env
     });
 
     const storageStack = new StorageStack(this, 'StorageStack', {
-      cluster: infraStack.cluster,
+      cluster: mainStack.cluster,
     });
 
     const cloudwatchStack = new CloudWatchStack(this, 'CloudWatchStack');
     const observabilityStack = new ObservabilityStack(this, 'ObservabilityStack', {
-      cluster: infraStack.cluster
+      cluster: mainStack.cluster
     });
 
     // Create Integration Test Stack, depends on EKS Stack
     const integrationTestStack = new IntegrationTestStack(this, 'IntegrationTestStack', {
-      cluster: infraStack.cluster,
-      queue: infraStack.sqsQueue
+      cluster: mainStack.cluster,
+      queue: mainStack.sqsQueue
     });
 
 
     // Create Resilience Test Stack, depends on EKS Stack
     const resilienceTestStack = new ResilienceTestStack(this, 'ResilienceTestStack', {
-      cluster: infraStack.cluster,
+      cluster: mainStack.cluster,
     });
 
-    storageStack.addDependency(infraStack);
-    observabilityStack.addDependency(infraStack);
-    cloudwatchStack.addDependency(infraStack);
-    integrationTestStack.addDependency(infraStack);
-    resilienceTestStack.addDependency(infraStack);
+    storageStack.addDependency(mainStack);
+    observabilityStack.addDependency(mainStack);
+    cloudwatchStack.addDependency(mainStack);
+    integrationTestStack.addDependency(mainStack);
+    resilienceTestStack.addDependency(mainStack);
   }
 }

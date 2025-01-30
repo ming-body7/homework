@@ -41,9 +41,7 @@ export class ResilienceTestStack extends cdk.NestedStack {
             {
                 resourceType: "aws:eks:nodegroup",
                 selectionMode: "ALL",
-                resourceTags: {
-                    "aws:cloudformation:stack-name": id,
-                },
+                resourceArns: [props.cluster.defaultNodegroup?.nodegroupArn || 'should not reach here'],
             };
 
         // Actions

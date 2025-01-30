@@ -13,7 +13,7 @@ export class StorageStack extends cdk.NestedStack {
             namespace: 'kube-system',
         });
         // need eks cluster awsauth ready to execute service account creation
-        ebsServiceAccount.node.addDependency(props.cluster.awsAuth);
+        ebsServiceAccount.node.addDependency(props.cluster);
 
         const ebsPolicy = new iam.PolicyStatement({
             actions: [

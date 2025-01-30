@@ -12,10 +12,12 @@ This guide explains how to deploy the Spring Boot application that processes SQS
 6. Add User: cdk-user in AWS IAM with Admin Policy: AdministratorAccess, get Access keys
 7. Config AWS with command: aws configure, enter access key id, access key, region as us-west-2
 
-## Bootstrap setup
+## CDK Bootstrap setup
 change aws account and region in cdk-app/cdk-app/ts for BootstrapStack and required stack like BetaStack
 ```bash
+cd cdk-app
 cdk bootstrap
+cdk deploy BoostrapStack
 ```
 
 ## Deployment Steps
@@ -36,15 +38,15 @@ mvn clean package
 cd ../cdk-app
 npm install
 # deploy BetaStack or ProdStack
-cdk deploy BetaStack
+cdk deploy BetaStackTest
 ```
 
 5. Verify deployment:
-find cluster in AWS Console
+find cluster in AWS Console, replace with your cluster name and region
 ```bash
-aws eks update-kubeconfig --name <cluster-name> --region $REGION
+aws eks update-kubeconfig --name <cluster-name> --region us-west-2
 kubectl get pods
-kubectl logs -f -l app=spring-app
+kubectl get all --all-namespaces
 ```
 6. Remove stack
 ```bash
