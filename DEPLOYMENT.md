@@ -46,6 +46,10 @@ aws eks update-kubeconfig --name <cluster-name> --region $REGION
 kubectl get pods
 kubectl logs -f -l app=spring-app
 ```
+6. Remove stack
+```bash
+cdk destroy --all
+```
 
 ## Monitoring
 - Monitor SQS queue: AWS Console -> SQS
