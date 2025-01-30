@@ -151,7 +151,7 @@ export class MainStack extends cdk.NestedStack {
         // Apply the Kubernetes manifest to the cluster
         const springBootApp = this.cluster.addManifest('SpringBootApp', springBootAppDeployment, springBootAppHPA, springBootAppService);
         springBootApp.node.addDependency(appServiceAccount);
-        appServiceAccount.node.addDependency(this.cluster);
+        appServiceAccount.node.addDependency(this.cluster.awsAuth);
 
     }
 }
