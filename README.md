@@ -9,3 +9,10 @@
 1. java-app contains springboot service which have both api and sqs listener
 2. cdk-app contains infra setup
 3. integration-test contains test springboot app
+
+## Deliverables
+1. source code[done]
+2. K8S deployment manifests or Helm charts: all are in AWS CDK package in path cdk-app/lib/stacks/*
+3. Test coverage report: in path test_reports/*
+4. Resilience test report: in path test_reports/*
+5. Documentation: DEPLOYMENT.md for deployment instruction, HighLevelDesign.md, TEST.md for integration test, resilience test, unit test
