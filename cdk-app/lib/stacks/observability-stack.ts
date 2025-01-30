@@ -50,7 +50,7 @@ export class ObservabilityStack extends cdk.NestedStack {
         });
 
         cloudWatchServiceAccount.role.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentAdminPolicy'));
-        cloudWatchServiceAccount.node.addDependency(props.cluster);
+        cloudWatchServiceAccount.node.addDependency(props.cluster.awsAuth);
 
         const cloudwatchChart = props.cluster.addHelmChart('CloudwatchAgent', {
             chart: 'aws-cloudwatch-metrics',

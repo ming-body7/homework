@@ -83,6 +83,6 @@ export class ResilienceTestStack extends cdk.NestedStack {
             }
         );
 
-        templateEksTerminateNodeGroup.node.addDependency(props.cluster);
+        templateEksTerminateNodeGroup.node.addDependency(props.cluster.awsAuth);
     }
 }
