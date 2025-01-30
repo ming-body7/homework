@@ -9,6 +9,14 @@ This guide explains how to deploy the Spring Boot application that processes SQS
 3. kubectl installed
 4. Maven installed
 5. Node.js and npm installed (for CDK)
+6. Add User: cdk-user in AWS IAM with Admin Policy: AdministratorAccess, get Access keys
+7. Config AWS with command: aws configure, enter access key id, access key, region as us-west-2
+
+## Bootstrap setup
+change aws account and region in cdk-app/cdk-app/ts for BootstrapStack and required stack like BetaStack
+```bash
+cdk bootstrap
+```
 
 ## Deployment Steps
 
@@ -18,47 +26,28 @@ cd java-app
 mvn clean package
 ```
 
-2. Create an ECR repository (first time only):
+2. Build and push Docker image:
 ```bash
-aws ecr create-repository --repository-name spring-app
-```
-
-3. Build and push Docker image:
-```bash
-export ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-export REGION=$(aws configure get region)
-
-aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com
-
-docker build -t spring-app .
-docker tag spring-app:latest $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/spring-app:latest
-docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/spring-app:latest
+./build-and-push.sh 651706779316.dkr.ecr.us-west-2.amazonaws.com/my-springboot-app us-west-2
 ```
 
 4. Deploy infrastructure using CDK:
 ```bash
 cd ../cdk-app
 npm install
-cdk deploy
+# deploy BetaStack or ProdStack
+cdk deploy BetaStack
 ```
 
 5. Verify deployment:
+find cluster in AWS Console
 ```bash
 aws eks update-kubeconfig --name <cluster-name> --region $REGION
 kubectl get pods
 kubectl logs -f -l app=spring-app
 ```
 
-## Architecture
-
-The application consists of:
-- Amazon EKS cluster running the Spring Boot application
-- Amazon SQS queue for message processing
-- IAM roles and service accounts for secure access
-- Container image stored in Amazon ECR
-
 ## Monitoring
-
-- View application logs: `kubectl logs -f -l app=spring-app`
 - Monitor SQS queue: AWS Console -> SQS
-- View EKS cluster status: `kubectl get pods,svc`
+- View EKS cluster status: AWS Console -> EKS
+- Log: AWS Console -> Cloudwatch -> Logs -> LogGroup: /aws/eks/fluentbit-cloudwatch/logs

@@ -3,7 +3,7 @@ kind: Job
 metadata:
   name: integration-test-job
 spec:
-  ttlSecondsAfterFinished: 600
+  ttlSecondsAfterFinished: 180
   backoffLimit: 0
   template:
     spec:

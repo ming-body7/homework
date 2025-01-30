@@ -19,6 +19,10 @@ EXIT_CODE=$(kubectl get pod "$POD_NAME" --namespace "$NAMESPACE" -o jsonpath='{.
 # Display the exit code
 if [ -z "$EXIT_CODE" ]; then
   echo "Pod $POD_NAME has not terminated yet."
+elif [ "$EXIT_CODE" -eq 0 ]; then
+  echo "integration test succeed."
+elif [ "$EXIT_CODE" -eq 1 ]; then
+  echo "integration test failed."
 else
-  echo "Pod $POD_NAME exited with code: $EXIT_CODE"
+  echo "Pod $POD_NAME exited with code: $EXIT_CODE, unknown status, 0 means integration test succeed, 1 means integration test failed."
 fi
