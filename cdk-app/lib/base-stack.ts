@@ -49,7 +49,7 @@ export class BaseStack extends cdk.Stack {
     });
 
     // Reference the existing IAM user by its name
-    const existingIamUser = iam.User.fromUserName(this, `arn:aws:iam::${props.env?.account}:user/cdk-user`, 'cdk-user'); // Replace with your IAM user name
+    const existingIamUser = iam.User.fromUserName(this, `arn:aws:iam::${props.env?.account}:user/cdk-user`, 'cdk-user');
 
     // Add the IAM user to the aws-auth ConfigMap with system:masters (admin access)
     cluster.awsAuth.addUserMapping(existingIamUser, {
@@ -240,39 +240,6 @@ export class BaseStack extends cdk.Stack {
     //Integration test setup
     repository.grantPull(cluster.defaultNodegroup?.role!);
 
-    //Resilience test setup
-    // Import FIS Role and Stop Condition
-    // Create a new IAM Role
-    const fisExperimentRole = new iam.Role(this, 'FISExperimentRole', {
-      assumedBy: new iam.ServicePrincipal('fis.amazonaws.com'), // FIS service assumes this role
-      description: 'Role for AWS Fault Injection Simulator (FIS) experiments',
-    });
-
-    // Add permissions to the role
-    fisExperimentRole.addToPolicy(
-        new iam.PolicyStatement({
-          actions: [
-            'fis:CreateExperimentTemplate',
-            'fis:StartExperiment',
-            'fis:StopExperiment',
-            'fis:ListExperiments',
-            'fis:GetExperiment',
-          ],
-          resources: ['*'], // Restrict resource access as needed
-        })
-    );
-
-    // Optional: Add additional permissions, such as for managing EKS resources
-    fisExperimentRole.addToPolicy(
-        new iam.PolicyStatement({
-          actions: [
-            'eks:DescribeCluster',
-            'eks:ListClusters',
-            'eks:AccessKubernetesApi',
-          ],
-          resources: ['*'], // Restrict resource access as needed
-        })
-    );
 
     // alarm and sns to notify fraud transaction
     const fraudMetric = new cloudwatch.Metric({
@@ -299,24 +266,54 @@ export class BaseStack extends cdk.Stack {
 
 
     // FIS resilience test
+    // Add permissions to the role
+    //Resilience test setup
+    // Import FIS Role and Stop Condition
+    // Create a new IAM Role
+    const fisExperimentRole = new iam.Role(this, 'FISExperimentRole', {
+      assumedBy: new iam.ServicePrincipal('fis.amazonaws.com'), // FIS service assumes this role
+      description: 'Role for AWS Fault Injection Simulator (FIS) experiments',
+    });
+    fisExperimentRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'fis:CreateExperimentTemplate',
+            'fis:StartExperiment',
+            'fis:StopExperiment',
+            'fis:ListExperiments',
+            'fis:GetExperiment',
+          ],
+          resources: ['*'], // Restrict resource access as needed
+        })
+    );
+
+    // Optional: Add additional permissions, such as for managing EKS resources
+    fisExperimentRole.addToPolicy(
+        new iam.PolicyStatement({
+          actions: [
+            'eks:*',
+            'ec2:*',
+          ],
+          resources: ['*'], // Restrict resource access as needed
+        })
+    );
+
     // Targets
     const targetEKSCluster: fis.CfnExperimentTemplate.ExperimentTemplateTargetProperty =
         {
           resourceType: "aws:eks:nodegroup",
           selectionMode: "ALL",
           resourceTags: {
-            "aws:cloudformation:stack-name":
-                this.stackId,
+            "aws:cloudformation:stack-name": id,
           },
         };
-
 
     // Actions
     const terminateNodeGroupInstance: fis.CfnExperimentTemplate.ExperimentTemplateActionProperty =
         {
           actionId: "aws:eks:terminate-nodegroup-instances",
           parameters: {
-            instanceTerminationPercentage: "40",
+            instanceTerminationPercentage: "50",
           },
           targets: {
             Nodegroups: "nodeGroupTarget",
@@ -330,17 +327,16 @@ export class BaseStack extends cdk.Stack {
         {
           description:
               "Terminate 50 per cent instances on the EKS target node group.",
-          roleArn: fisExperimentRole.roleArn.toString(),
+          roleArn: fisExperimentRole.roleArn,
           stopConditions: [
               //TODO: update to other alarm like CPU/MEM/Availibality
             {
-              "source": "aws:fis:experiment",
-              "value": "duration=300"
+              "source": "none"
             },
           ],
           tags: {
             Name: "Terminate 50 per cent instances on the EKS target node group",
-            Stackname: this.stackName,
+            Stackname: cluster.clusterName,
           },
           actions: {
             nodeGroupActions: terminateNodeGroupInstance,
@@ -350,5 +346,7 @@ export class BaseStack extends cdk.Stack {
           },
         }
     );
+
+    templateEksTerminateNodeGroup.node.addDependency(cluster);
   }
 }
