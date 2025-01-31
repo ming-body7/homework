@@ -50,6 +50,17 @@ kubectl get all --all-namespaces
 ```
 6. Remove stack
 ```bash
+kubectl delete deployment,statefulset,daemonset,job,cronjob,svc,ingress --all --all-namespaces
+kubectl delete serviceaccount --all --all-namespaces --grace-period=0 --force
+kubectl delete rolebinding --all --all-namespaces
+kubectl delete clusterrolebinding --all
+helm list -A --output json | jq -r '.[] | .name + " " + .namespace' | while read name namespace; do
+  echo "Uninstalling Helm release: $name in namespace: $namespace"
+  helm uninstall "$name" -n "$namespace" --no-hooks
+done
+kubectl get crd | awk '{print $1}' | xargs kubectl delete crd
+kubectl delete pvc --all --all-namespaces
+kubectl delete pv --all
 cdk destroy --all
 ```
 
